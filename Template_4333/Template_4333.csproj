@@ -72,6 +72,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="4333_Tarasova.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="4333_Valiakhmetov.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -98,6 +102,9 @@
     </Compile>
     <Compile Include="4333_Sagitova.xaml.cs">
       <DependentUpon>4333_Sagitova.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="4333_Tarasova.xaml.cs">
+      <DependentUpon>4333_Tarasova.xaml</DependentUpon>
     </Compile>
     <Compile Include="4333_Valiakhmetov.xaml.cs">
       <DependentUpon>4333_Valiakhmetov.xaml</DependentUpon>
