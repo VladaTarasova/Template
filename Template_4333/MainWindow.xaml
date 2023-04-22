@@ -41,5 +41,6 @@
         <Button Grid.Row="7" Content="Автор изменений" Width="150" Click="_4333_Davliev"/>
         <Button Grid.Row="4" Content="Автор изменений" Width="150" Foreground="Black" Background="Linen" Click="dinarClick"/>
         <Button Grid.Row="9" Content="Автор изменений" Width="150" Background="LimeGreen" Click="_4333_Ibragimov"/>
+        <Button Grid.Row="17" Content="Автор изменений" Width="150" Click="_4333_Tarasova"/>
     </Grid>
 </Window>
