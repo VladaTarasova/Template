@@ -63,5 +63,10 @@ namespace Template_4333
             ibragimov.Show();
             this.Hide();
         }
+        private void _4333_Tarasova(object sender, RoutedEventArgs e)
+        {
+            _4333_Tarasova tarasova = new _4333_Tarasova();
+            tarasova.Show();
+        }
     }
 }
