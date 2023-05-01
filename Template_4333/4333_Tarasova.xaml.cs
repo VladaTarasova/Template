@@ -13,6 +13,19 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.IO;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
+using System.Security.Cryptography;
+using System.Data.Entity;
+using Paragraph = DocumentFormat.OpenXml.Wordprocessing.Paragraph;
+using Run = DocumentFormat.OpenXml.Wordprocessing.Run;
+using Table = DocumentFormat.OpenXml.Wordprocessing.Table;
+using TableRow = DocumentFormat.OpenXml.Wordprocessing.TableRow;
+using TableCell = DocumentFormat.OpenXml.Wordprocessing.TableCell;
 
 namespace Template_4333
 {
@@ -118,5 +131,160 @@ namespace Template_4333
                 }
             }
         }
+        private void ImportJsonButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog openFileDialog = new OpenFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                string jsonFilePath = openFileDialog.FileName;
+                string jsonData = File.ReadAllText(jsonFilePath);
+                JArray userJArray = JArray.Parse(jsonData);
+
+                SaveUsersToDatabase(userJArray);
+            }
+        }
+        private void SaveUsersToDatabase(JArray users)
+        {
+            using (workersdbEntities1 workersEntities = new workersdbEntities1())
+            {
+                foreach (JObject user in users)
+                {
+                    int userId = (int)user["Id"];
+                    // Проверьте, есть ли пользователь с данным Id в БД
+                    var existingUser = workersEntities.Workers.SingleOrDefault(u => u.Id == userId);
+
+                    if (existingUser == null)
+                    {
+                        // Добавьте нового пользователя
+                        Workers newUser = new Workers
+                        {
+                            Id = userId,
+                            Role = (string)user["Role"],
+                            FIO = (string)user["FIO"],
+                            Login = (string)user["Login"],
+                            Password = (string)user["Password"]
+                        };
+
+                        workersEntities.Workers.Add(newUser);
+                    }
+                    else
+                    {
+                        // Обновите данные существующего пользователя
+                        existingUser.Role = (string)user["Role"];
+                        existingUser.FIO = (string)user["FIO"];
+                        existingUser.Login = (string)user["Login"];
+                        existingUser.Password = (string)user["Password"];
+                    }
+                }
+
+                workersEntities.SaveChanges();
+            }
+        }
+        private async void ExportToWordButton_Click(object sender, RoutedEventArgs e)
+        {
+            var usersByPosition = await GetUsersGroupedByPosition();
+            string fileName = "exported_data.docx";
+            string filePath = System.IO.Path.Combine(Environment.CurrentDirectory, fileName);
+            ExportUsersToWord(usersByPosition, filePath);
+            MessageBox.Show($"Данные экспортированы в файл {filePath}");
+        }
+        private async Task<Dictionary<string, List<Workers>>> GetUsersGroupedByPosition()
+        {
+            using (workersdbEntities1 workersEntities = new workersdbEntities1())
+            {
+                return await workersEntities.Workers
+                    .GroupBy(user => user.Role)
+                    .ToDictionaryAsync(group => group.Key, group => group.ToList());
+            }
+        }
+        private void ExportUsersToWord(Dictionary<string, List<Workers>> usersByPosition, string filePath)
+        {
+            using (WordprocessingDocument document = WordprocessingDocument.Create(filePath, WordprocessingDocumentType.Document))
+            {
+                // Добавить основные структуры документа
+                document.AddMainDocumentPart();
+                document.MainDocumentPart.Document = new Document();
+                Body body = document.MainDocumentPart.Document.AppendChild(new Body());
+
+                foreach (var positionGroup in usersByPosition)
+                {
+                    string position = positionGroup.Key;
+                    List<Workers> workers = positionGroup.Value;
+
+                    // Создать новый абзац с текстом заголовка
+                    var headerParagraph = new DocumentFormat.OpenXml.Wordprocessing.Paragraph();
+                    var headerRun = new DocumentFormat.OpenXml.Wordprocessing.Run();
+                    var headerText = new DocumentFormat.OpenXml.Wordprocessing.Text(position);
+                    headerRun.Append(headerText);
+                    headerParagraph.Append(headerRun);
+                    body.Append(headerParagraph);
+
+                    // Создать таблицу
+                    var table = new Table();
+
+                    // Создать свойства таблицы
+                    TableProperties tableProperties = new TableProperties(
+                        new TableWidth { Type = TableWidthUnitValues.Auto, Width = "0" });
+
+                    // Добавить свойства таблицы к таблице
+                    table.Append(tableProperties);
+
+                    // Создать и добавить строку заголовков
+                    var headerRow = new TableRow();
+                    var loginHeaderCell = new TableCell(new Paragraph(new Run(new Text("Логин"))));
+                    var passwordHeaderCell = new TableCell(new Paragraph(new Run(new Text("Пароль"))));
+                    headerRow.Append(loginHeaderCell, passwordHeaderCell);
+                    table.Append(headerRow);
+
+                    // Добавить строки данных в таблицу
+                    foreach (var worker in workers)
+                    {
+                        var loginCell = new TableCell(new Paragraph(new Run(new Text(worker.Login))));
+
+                        // Хэширование пароля
+                        var passwordHash = ComputeSha256Hash(worker.Password);
+                        var passwordCell = new TableCell(new Paragraph(new Run(new Text(passwordHash))));
+
+                        // Создать новую строку и добавить ячейки
+                        var dataRow = new TableRow();
+                        dataRow.Append(loginCell, passwordCell);
+
+                        // Добавить строку в таблицу
+                        table.Append(dataRow);
+                    }
+
+                    // Добавить таблицу в тело документа
+                    body.Append(table);
+                    // Добавить разрыв страницы перед следующей группой данных
+                    body.Append(new DocumentFormat.OpenXml.Wordprocessing.Paragraph(
+                        new DocumentFormat.OpenXml.Wordprocessing.Run(
+                            new DocumentFormat.OpenXml.Wordprocessing.Break { Type = DocumentFormat.OpenXml.Wordprocessing.BreakValues.Page })));
+
+                }
+
+                // Сохранить изменения в документе
+                document.MainDocumentPart.Document.Save();
+            }
+        }
+        private static string ComputeSha256Hash(string rawData)
+        {
+            using (SHA256 sha256Hash = SHA256.Create())
+            {
+                byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(rawData));
+
+                StringBuilder builder = new StringBuilder();
+                for (int i = 0; i < bytes.Length; i++)
+                {
+                    builder.Append(bytes[i].ToString("x2"));
+                }
+                return builder.ToString();
+            }
+        }
+
     }
 }
